@@ -6,10 +6,12 @@ import com.foodapp.dto.MarketplaceDtos;
 import com.foodapp.repository.SellerRepository;
 import com.foodapp.repository.SubscriptionPlanRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class SellerService {
@@ -34,10 +36,12 @@ public class SellerService {
         List<MarketplaceDtos.PlanDto> plans = subscriptionPlanRepository.findBySellerId(sellerId).stream()
                 .map(this::toPlanDto)
                 .toList();
+        log.info("Fetched details for seller {} with {} plans", seller.getBrandName(), plans.size());
         return new MarketplaceDtos.SellerDetail(seller.getId(), seller.getBrandName(), seller.getDeliveryRadiusKm(), plans);
     }
 
     private MarketplaceDtos.PlanDto toPlanDto(SubscriptionPlan p) {
+        log.info("Mapping SubscriptionPlan {} to PlanDto", p.getName());
         return new MarketplaceDtos.PlanDto(p.getId(), p.getName(), p.getPrice(), p.getDurationDays(), p.getStatus().name());
     }
 
@@ -47,6 +51,7 @@ public class SellerService {
         double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
                 + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
                 * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        log.info("Calculated distance components: dLat={}, dLon={}, a={}", dLat, dLon, a);
         return 6371.0 * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
     }
 }
