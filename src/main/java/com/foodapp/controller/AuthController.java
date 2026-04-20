@@ -21,4 +21,29 @@ public class AuthController {
     public AuthDtos.AuthResponse login(@Valid @RequestBody AuthDtos.LoginRequest request) {
         return authService.login(request);
     }
+
+    @PostMapping("/login/otp/request")
+    public AuthDtos.OtpResponse requestOtp(@Valid @RequestBody AuthDtos.OtpRequest request) {
+        return authService.requestLoginOtp(request);
+    }
+
+    @PostMapping("/login/otp/verify")
+    public AuthDtos.AuthResponse verifyOtp(@Valid @RequestBody AuthDtos.VerifyOtpRequest request) {
+        return authService.verifyLoginOtp(request);
+    }
+
+    @PostMapping("/forgot-password")
+    public AuthDtos.OtpResponse forgotPassword(@Valid @RequestBody AuthDtos.ForgotPasswordRequest request) {
+        return authService.forgotPassword(request);
+    }
+
+    @PostMapping("/forgot-password/reset")
+    public void resetPassword(@Valid @RequestBody AuthDtos.ResetPasswordRequest request) {
+        authService.resetPassword(request);
+    }
+
+    @PostMapping("/deactivate")
+    public void deactivate(@Valid @RequestBody AuthDtos.DeactivateAccountRequest request) {
+        authService.deactivate(request);
+    }
 }

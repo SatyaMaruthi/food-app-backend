@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 
 @Slf4j
@@ -37,7 +39,16 @@ public class SellerService {
                 .map(this::toPlanDto)
                 .toList();
         log.info("Fetched details for seller {} with {} plans", seller.getBrandName(), plans.size());
-        return new MarketplaceDtos.SellerDetail(seller.getId(), seller.getBrandName(), seller.getDeliveryRadiusKm(), plans);
+        return new MarketplaceDtos.SellerDetail(seller.getId(), seller.getBrandName(), seller.getDeliveryRadiusKm(), plans, "Weekly Menu");
+    }
+
+    public MarketplaceDtos.WeeklyAmountResponse weeklyAmount(Long planId, int quantity, int days) {
+        SubscriptionPlan plan = subscriptionPlanRepository.findById(planId).orElseThrow();
+        BigDecimal amount = plan.getPrice()
+                .multiply(BigDecimal.valueOf(quantity))
+                .multiply(BigDecimal.valueOf(days))
+                .divide(BigDecimal.valueOf(plan.getDurationDays()), 2, RoundingMode.HALF_UP);
+        return new MarketplaceDtos.WeeklyAmountResponse(planId, quantity, days, amount);
     }
 
     private MarketplaceDtos.PlanDto toPlanDto(SubscriptionPlan p) {

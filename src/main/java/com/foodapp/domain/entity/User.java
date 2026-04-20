@@ -28,6 +28,8 @@ public class User extends BaseEntity {
     private Enums.Role role;
     @Column(length = 20)
     private String phone;
+    @Column(nullable = false)
+    private boolean active = true;
     private Double latitude;
     private Double longitude;
 }

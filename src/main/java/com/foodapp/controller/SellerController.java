@@ -26,4 +26,11 @@ public class SellerController {
     public MarketplaceDtos.SellerDetail detail(@PathVariable Long id) {
         return sellerService.detail(id);
     }
+
+    @GetMapping("/weekly-amount")
+    public MarketplaceDtos.WeeklyAmountResponse weeklyAmount(@RequestParam Long planId,
+                                                             @RequestParam(defaultValue = "1") int quantity,
+                                                             @RequestParam(defaultValue = "7") int days) {
+        return sellerService.weeklyAmount(planId, quantity, days);
+    }
 }

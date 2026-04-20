@@ -33,8 +33,29 @@ public class SubscriptionController {
         subscriptionService.skipDay(id, request.date());
     }
 
+    @PatchMapping("/{id}/deliver")
+    public void markDelivered(@PathVariable Long id, @RequestBody SubscriptionDtos.DeliveryActionRequest request) {
+        subscriptionService.markDelivered(id, request);
+    }
+
+    @PatchMapping("/{id}/edit-delivery")
+    public void editDelivery(@PathVariable Long id, @RequestBody SubscriptionDtos.EditDeliveryRequest request,
+                             @RequestParam String date) {
+        subscriptionService.editActiveDelivery(id, java.time.LocalDate.parse(date), request);
+    }
+
     @GetMapping
     public List<SubscriptionDtos.SubscriptionResponse> list(@RequestHeader("X-User-Id") Long userId) {
         return subscriptionService.byUser(userId);
+    }
+
+    @GetMapping("/active-orders")
+    public List<SubscriptionDtos.SubscriptionResponse> activeOrders(@RequestHeader("X-User-Id") Long userId) {
+        return subscriptionService.activeOrders(userId);
+    }
+
+    @GetMapping("/past-orders")
+    public List<SubscriptionDtos.SubscriptionResponse> pastOrders(@RequestHeader("X-User-Id") Long userId) {
+        return subscriptionService.pastOrders(userId);
     }
 }

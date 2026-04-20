@@ -7,6 +7,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Getter
 @Setter
@@ -27,4 +28,17 @@ public class SubscriptionDelivery extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private Enums.DeliveryStatus status;
+    @Column(length = 120)
+    private String deliveryBy;
+    @Column(length = 60)
+    private String timeZone;
+    @Column(length = 20)
+    private String mobileNumber;
+    @Column(length = 255)
+    private String liveTrackingUrl;
+    @Column(length = 120)
+    private String deliveredBy;
+    private LocalDateTime deliveredOn;
+    private Integer rating;
+    private String feedback;
 }
