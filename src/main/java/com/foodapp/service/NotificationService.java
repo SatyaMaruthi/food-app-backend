@@ -1,6 +1,7 @@
 package com.foodapp.service;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -11,6 +12,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 @Slf4j
 @Service
+@ConditionalOnBean(JavaMailSender.class)
 public class NotificationService {
     private final JavaMailSender mailSender;
     private final Queue<MailTask> retryQueue = new ConcurrentLinkedQueue<>();

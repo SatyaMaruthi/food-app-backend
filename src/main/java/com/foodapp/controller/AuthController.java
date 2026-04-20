@@ -46,4 +46,9 @@ public class AuthController {
     public void deactivate(@Valid @RequestBody AuthDtos.DeactivateAccountRequest request) {
         authService.deactivate(request);
     }
+
+    @PostMapping("/logout")
+    public void logout() {
+        // Stateless JWT logout is handled client-side by token removal.
+    }
 }

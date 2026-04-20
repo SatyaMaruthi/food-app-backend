@@ -4,6 +4,7 @@ import com.foodapp.domain.Enums;
 import com.foodapp.domain.entity.*;
 import com.foodapp.dto.SubscriptionDtos;
 import com.foodapp.repository.*;
+import org.springframework.lang.Nullable;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -24,7 +25,7 @@ public class SubscriptionService {
     private final SubscriptionPlanRepository planRepository;
     private final SubscriptionRepository subscriptionRepository;
     private final SubscriptionDeliveryRepository deliveryRepository;
-    private final NotificationService notificationService;
+    private final @Nullable NotificationService notificationService;
     private final List<String> activePartners = List.of("Ravi Kumar", "Aisha Khan", "Sandeep Naik", "Priya Das");
     private final AtomicInteger partnerCursor = new AtomicInteger(0);
 
@@ -66,7 +67,17 @@ public class SubscriptionService {
         List<LocalDate> dates = deliveryRepository.findBySubscriptionIdOrderByDeliveryDateAsc(s.getId())
                 .stream().map(SubscriptionDelivery::getDeliveryDate).toList();
         log.info("Created subscription with ID {} and delivery dates: {}", s.getId(), dates);
-        notificationService.notifyOrderCreated(user.getEmail(), seller.getUser().getEmail(), "delivery.partner@foodapp.local", s.getId());
+
+        if (notificationService != null) {
+            notificationService.notifyOrderCreated(
+                    user.getEmail(),
+                    seller.getUser().getEmail(),
+                    "delivery.partner@foodapp.local",
+                    s.getId()
+            );
+        }
+
+//        notificationService.notifyOrderCreated(user.getEmail(), seller.getUser().getEmail(), "delivery.partner@foodapp.local", s.getId());
         return toResponse(s, deliveryRepository.findBySubscriptionIdOrderByDeliveryDateAsc(s.getId()));
     }
 
