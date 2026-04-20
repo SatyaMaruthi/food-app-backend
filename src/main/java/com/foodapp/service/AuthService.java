@@ -5,6 +5,7 @@ import com.foodapp.domain.entity.User;
 import com.foodapp.dto.AuthDtos;
 import com.foodapp.repository.UserRepository;
 import com.foodapp.security.JwtService;
+import org.springframework.lang.Nullable;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.mail.SimpleMailMessage;
@@ -25,7 +26,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
-    private final JavaMailSender mailSender;
+    private final @Nullable JavaMailSender mailSender;
     private final Map<String, OtpState> otpStore = new ConcurrentHashMap<>();
     private final Random random = new Random();
 
