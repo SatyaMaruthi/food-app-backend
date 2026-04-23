@@ -27,17 +27,31 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final @Nullable JavaMailSender mailSender;
+    private final @Nullable SmsService smsService;
+    private final @Nullable DemoSmsService demoSmsService;
     private final Map<String, OtpState> otpStore = new ConcurrentHashMap<>();
     private final Random random = new Random();
 
     public AuthDtos.OtpResponse requestLoginOtp(AuthDtos.OtpRequest request) {
         boolean existing = userRepository.findByEmail(request.email()).isPresent();
+
         String otp = generateOtp();
-        otpStore.put(request.email().toLowerCase(), new OtpState(otp, Instant.now().plusSeconds(300)));
-        AuthDtos.OtpChannel channel = request.channel() == null ? AuthDtos.OtpChannel.EMAIL : request.channel();
+
+        otpStore.put(
+                request.email().toLowerCase(),
+                new OtpState(otp, Instant.now().plusSeconds(300))
+        );
+
+        AuthDtos.OtpChannel channel =
+                request.channel() == null ? AuthDtos.OtpChannel.EMAIL : request.channel();
+
         String destination = dispatchOtp(channel, request.email(), request.mobileNumber(), otp);
-        String message = existing ? "OTP sent for login" : "OTP sent, complete registration";
-        return new AuthDtos.OtpResponse(existing, message, destination);
+
+        return new AuthDtos.OtpResponse(
+                existing,
+                "OTP sent successfully" + otp,
+                destination
+        );
     }
 
     public AuthDtos.AuthResponse verifyLoginOtp(AuthDtos.VerifyOtpRequest request) {
@@ -57,18 +71,24 @@ public class AuthService {
     }
 
     public AuthDtos.AuthResponse register(AuthDtos.RegisterRequest request) {
+        String email = request.email().toLowerCase();
+        if (userRepository.findByEmail(email).isPresent()) {
+            throw new IllegalArgumentException("Email already registered");
+        }
         User user = new User();
-        user.setEmail(request.email());
+        user.setEmail(email);
         user.setFullName(request.fullName());
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setRole(Enums.Role.valueOf(request.role().toUpperCase()));
+        user.setActive(true);
         userRepository.save(user);
         String token = jwtService.generateToken(user.getEmail(), user.getRole().name());
         return new AuthDtos.AuthResponse(token, user.getEmail(), user.getRole().name());
     }
 
     public AuthDtos.AuthResponse login(AuthDtos.LoginRequest request) {
-        User user = userRepository.findByEmail(request.email())
+        String email = request.email().toLowerCase();
+        User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new IllegalArgumentException("Invalid credentials"));
         if (!user.isActive()) {
             throw new IllegalArgumentException("Account is deactivated");
@@ -131,9 +151,8 @@ public class AuthService {
 
     private String dispatchOtp(AuthDtos.OtpChannel channel, String email, String mobileNumber, String otp) {
         if (channel == AuthDtos.OtpChannel.MOBILE) {
-            String masked = maskMobile(mobileNumber);
-            log.info("Sending OTP to mobile {}. OTP={}", masked, otp);
-            return masked;
+            sendOtpSms(mobileNumber, otp);
+            return maskMobile(mobileNumber);
         }
         sendOtpEmail(email, otp);
         return maskEmail(email);
@@ -141,6 +160,10 @@ public class AuthService {
 
     private void sendOtpEmail(String email, String otp) {
         try {
+            if (mailSender == null) {
+                log.warn("Mail sender not configured, skipping email for {}", email);
+                return;
+            }
             SimpleMailMessage message = new SimpleMailMessage();
             message.setTo(email);
             message.setSubject("Your Food App OTP");
@@ -148,6 +171,28 @@ public class AuthService {
             mailSender.send(message);
         } catch (Exception ex) {
             log.warn("Failed to send OTP email to {}", email, ex);
+        }
+    }
+
+    private void sendOtpSms(String mobileNumber, String otp) {
+        String message = "Your Food App OTP is " + otp + ". Valid for 5 minutes.";
+
+        try {
+            log.info("OTP for {} is {}", mobileNumber, otp);
+
+            if (smsService != null) {
+                smsService.sendSms(mobileNumber, message);
+                return;
+            }
+
+        } catch (Exception ex) {
+            log.warn("Real SMS failed, switching to demo SMS for {}: {}", maskMobile(mobileNumber), ex.getMessage());
+        }
+
+        if (demoSmsService != null) {
+            demoSmsService.sendSms(mobileNumber, message);
+        } else {
+            log.warn("No SMS service available. OTP only in logs for {}", maskMobile(mobileNumber));
         }
     }
 

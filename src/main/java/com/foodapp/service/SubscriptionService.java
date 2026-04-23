@@ -25,7 +25,10 @@ public class SubscriptionService {
     private final SubscriptionPlanRepository planRepository;
     private final SubscriptionRepository subscriptionRepository;
     private final SubscriptionDeliveryRepository deliveryRepository;
+    private final MenuRepository menuRepository;
+    private final MenuItemRepository menuItemRepository;
     private final @Nullable NotificationService notificationService;
+    private final @Nullable RewardService rewardService;
     private final List<String> activePartners = List.of("Ravi Kumar", "Aisha Khan", "Sandeep Naik", "Priya Das");
     private final AtomicInteger partnerCursor = new AtomicInteger(0);
 
@@ -38,6 +41,12 @@ public class SubscriptionService {
         User user = userRepository.findById(userId).orElseThrow();
         Seller seller = sellerRepository.findById(request.sellerId()).orElseThrow();
         SubscriptionPlan plan = planRepository.findById(request.planId()).orElseThrow();
+
+        // Initialize reward for user if not exists
+        if (rewardService != null) {
+            rewardService.initializeReward(userId);
+        }
+
         log.info("Creating subscription for user {} with plan {} from seller {}", user.getFullName(), plan.getName(), seller.getBrandName());
         Subscription s = new Subscription();
         s.setUser(user);
@@ -77,7 +86,6 @@ public class SubscriptionService {
             );
         }
 
-//        notificationService.notifyOrderCreated(user.getEmail(), seller.getUser().getEmail(), "delivery.partner@foodapp.local", s.getId());
         return toResponse(s, deliveryRepository.findBySubscriptionIdOrderByDeliveryDateAsc(s.getId()));
     }
 
@@ -123,6 +131,12 @@ public class SubscriptionService {
         d.setDeliveredOn(LocalDateTime.now());
         d.setRating(request.rating());
         d.setFeedback(request.feedback());
+
+        // Award points to user
+        if (rewardService != null) {
+            Subscription subscription = d.getSubscription();
+            rewardService.addPoints(subscription.getUser().getId(), 50);  // 50 points per delivery
+        }
     }
 
     public List<SubscriptionDtos.SubscriptionResponse> activeOrders(Long userId) {
@@ -172,16 +186,38 @@ public class SubscriptionService {
                         d.getLiveTrackingUrl()
                 ))
                 .toList();
+
         String weeklyAmount = s.getPlan().getPrice()
                 .multiply(java.math.BigDecimal.valueOf(7))
                 .divide(java.math.BigDecimal.valueOf(s.getPlan().getDurationDays()), 2, RoundingMode.HALF_UP)
                 .toPlainString();
+
+        // Get weekly menu
+        List<Menu> weeklyMenus = menuRepository.findBySellerIdAndMenuType(s.getSeller().getId(), Enums.MenuType.WEEKLY);
+        SubscriptionDtos.WeeklyMenu weeklyMenu = null;
+        if (!weeklyMenus.isEmpty()) {
+            Menu menu = weeklyMenus.get(0);  // Get first available weekly menu
+            List<com.foodapp.domain.entity.MenuItem> menuItems = menuItemRepository.findByMenuId(menu.getId());
+            List<SubscriptionDtos.MenuItem> items = menuItems.stream()
+                    .map(item -> new SubscriptionDtos.MenuItem(
+                            item.getId(),
+                            item.getName(),
+                            item.getDescription(),
+                            item.getPrice().toPlainString()
+                    ))
+                    .toList();
+            weeklyMenu = new SubscriptionDtos.WeeklyMenu(menu.getId(), menu.getTitle(), items);
+        } else {
+            // Create a placeholder menu
+            weeklyMenu = new SubscriptionDtos.WeeklyMenu(0L, "Weekly Menu", List.of());
+        }
+
         return new SubscriptionDtos.SubscriptionResponse(
                 s.getId(),
                 s.getStatus().name(),
                 s.getSeller().getBrandName(),
                 s.getPlan().getName(),
-                "Weekly Menu",
+                weeklyMenu,
                 weeklyAmount,
                 summaries
         );

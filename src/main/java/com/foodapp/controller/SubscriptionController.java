@@ -39,9 +39,11 @@ public class SubscriptionController {
     }
 
     @PatchMapping("/{id}/edit-delivery")
-    public void editDelivery(@PathVariable Long id, @RequestBody SubscriptionDtos.EditDeliveryRequest request,
-                             @RequestParam String date) {
-        subscriptionService.editActiveDelivery(id, java.time.LocalDate.parse(date), request);
+    public void editDelivery(
+            @PathVariable Long id,
+            @RequestBody SubscriptionDtos.EditDeliveryRequest request
+    ) {
+        subscriptionService.editActiveDelivery(id, request.date(), request);
     }
 
     @GetMapping
