@@ -42,6 +42,7 @@ dependencies {
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
 
     implementation 'org.springframework.boot:spring-boot-starter-mail'
+    implementation 'com.twilio.sdk:twilio:9.13.0'
 }
 
 tasks.named('test') {
