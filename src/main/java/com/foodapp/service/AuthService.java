@@ -67,7 +67,7 @@ public class AuthService {
         }
         otpStore.remove(email);
         String token = jwtService.generateToken(user.getEmail(), user.getRole().name());
-        return new AuthDtos.AuthResponse(token, user.getEmail(), user.getRole().name());
+        return new AuthDtos.AuthResponse(token, user.getId(), user.getEmail(), user.getRole().name());
     }
 
     public AuthDtos.AuthResponse register(AuthDtos.RegisterRequest request) {
@@ -83,7 +83,7 @@ public class AuthService {
         user.setActive(true);
         userRepository.save(user);
         String token = jwtService.generateToken(user.getEmail(), user.getRole().name());
-        return new AuthDtos.AuthResponse(token, user.getEmail(), user.getRole().name());
+        return new AuthDtos.AuthResponse(token, user.getId(), user.getEmail(), user.getRole().name());
     }
 
     public AuthDtos.AuthResponse login(AuthDtos.LoginRequest request) {
@@ -97,7 +97,7 @@ public class AuthService {
             throw new IllegalArgumentException("Invalid credentials");
         }
         String token = jwtService.generateToken(user.getEmail(), user.getRole().name());
-        return new AuthDtos.AuthResponse(token, user.getEmail(), user.getRole().name());
+        return new AuthDtos.AuthResponse(token, user.getId(), user.getEmail(), user.getRole().name());
     }
 
     public AuthDtos.OtpResponse forgotPassword(AuthDtos.ForgotPasswordRequest request) {
