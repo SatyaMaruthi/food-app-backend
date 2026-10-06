@@ -3,13 +3,20 @@ package com.foodapp.controller;
 import com.foodapp.dto.SubscriptionDtos;
 import com.foodapp.service.SubscriptionService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
 
 @RestController
 @RequestMapping("/api/v1/subscriptions")
 @RequiredArgsConstructor
+@Slf4j
 public class SubscriptionController {
     private final SubscriptionService subscriptionService;
 
@@ -39,12 +46,20 @@ public class SubscriptionController {
     }
 
     @PatchMapping("/{id}/edit-delivery")
-    public void editDelivery(
-            @PathVariable Long id,
-            @RequestBody SubscriptionDtos.EditDeliveryRequest request
-    ) {
-        subscriptionService.editActiveDelivery(id, request.date(), request);
+    public ResponseEntity<?> editDelivery(@PathVariable Long id, @RequestBody SubscriptionDtos.EditDeliveryRequest request) {
+        try {
+            subscriptionService.editActiveDelivery(id, request);
+            return ResponseEntity.ok(Map.of("message", "Delivery updated"));
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
+        } catch (NoSuchElementException ex) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Delivery not found", ex);
+        } catch (Exception ex) {
+            log.error("Failed to edit delivery", ex);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not edit delivery", ex);
+        }
     }
+
 
     @GetMapping
     public List<SubscriptionDtos.SubscriptionResponse> list(@RequestHeader("X-User-Id") Long userId) {
@@ -60,4 +75,27 @@ public class SubscriptionController {
     public List<SubscriptionDtos.SubscriptionResponse> pastOrders(@RequestHeader("X-User-Id") Long userId) {
         return subscriptionService.pastOrders(userId);
     }
+
+    @PostMapping("/{subscriptionId}/deliveries/{deliveryId}/skip")
+    public ResponseEntity<?> skipDelivery(
+            @PathVariable Long subscriptionId,
+            @PathVariable Long deliveryId,
+            @RequestBody SkipRequest body,
+            @RequestHeader("X-User-Id") Long userId) {
+
+        subscriptionService.skipDelivery(userId, subscriptionId, deliveryId, body.reason());
+        return ResponseEntity.ok(Map.of("message", "Delivery skipped", "deliveryId", deliveryId));
+    }
+
+    @PostMapping("/{subscriptionId}/deliveries/{deliveryId}/unskip")
+    public ResponseEntity<?> unskipDelivery(
+            @PathVariable Long subscriptionId,
+            @PathVariable Long deliveryId,
+            @RequestHeader("X-User-Id") Long userId) {
+
+        subscriptionService.unskipDelivery(userId, subscriptionId, deliveryId);
+        return ResponseEntity.ok(Map.of("message", "Skip undone", "deliveryId", deliveryId));
+    }
+
+    public static record SkipRequest(String reason) {}
 }

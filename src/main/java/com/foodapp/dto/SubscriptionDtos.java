@@ -7,11 +7,8 @@ import java.util.List;
 public class SubscriptionDtos {
     public record CreateSubscriptionRequest(Long sellerId, Long planId, LocalDate startDate) {}
     public record DeliveryActionRequest(LocalDate date, Integer rating, String feedback) {}
-    public record EditDeliveryRequest(
-            LocalDate date,
-            String timeZone,
-            String mobileNumber
-    ) {}
+    public record EditDeliveryRequest(String date, String timeZone, String mobileNumber) {}
+
     public record DeliverySummary(
             LocalDate date,
             String status,

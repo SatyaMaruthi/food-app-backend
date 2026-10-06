@@ -1,5 +1,6 @@
 package com.foodapp.dto;
 
+import com.foodapp.enums.OtpPurpose;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 
@@ -14,8 +15,8 @@ public class AuthDtos {
     ) {}
 
     public record LoginRequest(@Email String email, @NotBlank String password) {}
-    public record OtpRequest(@Email String email, OtpChannel channel, String mobileNumber) {}
-    public record VerifyOtpRequest(@Email String email, @NotBlank String otp, String fullName) {}
+    public record OtpRequest(String email, String mobileNumber, AuthDtos.OtpChannel channel, OtpPurpose purpose) {}
+    public record VerifyOtpRequest(String email, String otp, String fullName, OtpPurpose purpose) {}
     public record ForgotPasswordRequest(@Email String email) {}
     public record ResetPasswordRequest(@Email String email, @NotBlank String otp, @NotBlank String newPassword) {}
     public record DeactivateAccountRequest(@Email String email, @NotBlank String otp) {}

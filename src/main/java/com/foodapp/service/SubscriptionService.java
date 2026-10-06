@@ -7,12 +7,13 @@ import com.foodapp.repository.*;
 import org.springframework.lang.Nullable;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.RoundingMode;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.*;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -31,6 +32,7 @@ public class SubscriptionService {
     private final @Nullable RewardService rewardService;
     private final List<String> activePartners = List.of("Ravi Kumar", "Aisha Khan", "Sandeep Naik", "Priya Das");
     private final AtomicInteger partnerCursor = new AtomicInteger(0);
+    private final DeliverySkipRepository deliverySkipRepository;
 
     @Transactional
     public SubscriptionDtos.SubscriptionResponse create(Long userId, SubscriptionDtos.CreateSubscriptionRequest request) {
@@ -117,10 +119,27 @@ public class SubscriptionService {
     }
 
     @Transactional
-    public void editActiveDelivery(Long subscriptionId, LocalDate date, SubscriptionDtos.EditDeliveryRequest request) {
-        SubscriptionDelivery d = deliveryRepository.findBySubscriptionIdAndDeliveryDate(subscriptionId, date).orElseThrow();
-        d.setTimeZone(request.timeZone());
-        d.setMobileNumber(request.mobileNumber());
+    public void editActiveDelivery(Long subscriptionId, SubscriptionDtos.EditDeliveryRequest request) {
+        if (request == null || request.date() == null || request.date().isBlank()) {
+            throw new IllegalArgumentException("Missing or empty date. Use yyyy-MM-dd");
+        }
+
+        LocalDate date;
+        try {
+            date = LocalDate.parse(request.date()); // expects yyyy-MM-dd
+        } catch (DateTimeParseException ex) {
+            throw new IllegalArgumentException("Invalid date format. Use yyyy-MM-dd");
+        }
+
+        SubscriptionDelivery d = deliveryRepository.findBySubscriptionIdAndDeliveryDate(subscriptionId, date)
+                .orElseThrow(() -> new IllegalArgumentException("Delivery not found for date: " + date));
+
+        // Optional: ownership check if you require X-User-Id
+        // if (!d.getSubscription().getUser().getId().equals(userIdFromHeader)) throw new AccessDeniedException("Not allowed");
+
+        if (request.timeZone() != null) d.setTimeZone(request.timeZone());
+        if (request.mobileNumber() != null) d.setMobileNumber(request.mobileNumber());
+        deliveryRepository.save(d);
     }
 
     @Transactional
@@ -226,5 +245,87 @@ public class SubscriptionService {
     private String pickActivePartner() {
         int index = Math.floorMod(partnerCursor.getAndIncrement(), activePartners.size());
         return activePartners.get(index);
+    }
+
+    @Transactional
+    public void skipDelivery(Long userId, Long subscriptionId, Long deliveryId, String reason) {
+        SubscriptionDelivery delivery = deliveryRepository.findById(deliveryId)
+                .orElseThrow(() -> new IllegalArgumentException("Delivery not found"));
+
+        // Validate subscription id matches
+        if (!delivery.getSubscription().getId().equals(subscriptionId)) {
+            throw new IllegalArgumentException("Delivery does not belong to subscription");
+        }
+
+        // Authorization: only owner can skip
+        if (!delivery.getSubscription().getUser().getId().equals(userId)) {
+            throw new AccessDeniedException("Not allowed");
+        }
+
+        // Business rule: cutoff time (example: 24 hours)
+        Instant cutoff = delivery.getDeliveryDate().atStartOfDay(ZoneId.of(delivery.getTimeZone() == null ? "Asia/Kolkata" : delivery.getTimeZone()))
+                .toInstant().minus(Duration.ofHours(24));
+        if (Instant.now().isAfter(cutoff)) {
+            throw new IllegalStateException("Cannot skip delivery after cutoff time");
+        }
+
+        // Idempotent: if already skipped, return
+        if (delivery.getStatus() == Enums.DeliveryStatus.SKIPPED) {
+            return;
+        }
+
+        // Optional: create skip record for audit/credits
+        DeliverySkip skip = new DeliverySkip();
+        skip.setScheduledDelivery(delivery);
+        skip.setSubscription(delivery.getSubscription());
+        skip.setUserId(userId);
+        skip.setReason(reason);
+        skip.setCreatedAt(Instant.now());
+        // save skip via skipRepo (inject it)
+        if (deliverySkipRepository != null) deliverySkipRepository.save(skip);
+
+        // Update delivery status
+        delivery.setStatus(Enums.DeliveryStatus.SKIPPED);
+        deliveryRepository.save(delivery);
+
+        // Optional: notify kitchen/delivery partner and create credit
+        if (notificationService != null) {
+            notificationService.notifyDeliverySkipped(delivery.getSubscription().getUser().getEmail(), delivery.getSubscription().getId(), delivery.getDeliveryDate());
+        }
+    }
+
+    @Transactional
+    public void unskipDelivery(Long userId, Long subscriptionId, Long deliveryId) {
+        SubscriptionDelivery delivery = deliveryRepository.findById(deliveryId)
+                .orElseThrow(() -> new IllegalArgumentException("Delivery not found"));
+
+        if (!delivery.getSubscription().getId().equals(subscriptionId)) {
+            throw new IllegalArgumentException("Delivery does not belong to subscription");
+        }
+
+        if (!delivery.getSubscription().getUser().getId().equals(userId)) {
+            throw new AccessDeniedException("Not allowed");
+        }
+
+        // Only allow undo if within allowed window (e.g., before cutoff)
+        Instant cutoff = delivery.getDeliveryDate().atStartOfDay(ZoneId.of(delivery.getTimeZone() == null ? "Asia/Kolkata" : delivery.getTimeZone()))
+                .toInstant().minus(Duration.ofHours(24));
+        if (Instant.now().isAfter(cutoff)) {
+            throw new IllegalStateException("Cannot undo skip after cutoff time");
+        }
+
+        if (delivery.getStatus() != Enums.DeliveryStatus.SKIPPED) {
+            return;
+        }
+
+        // Remove skip record if exists (skipRepo.deleteByScheduledDeliveryId(...))
+        if (deliverySkipRepository != null) deliverySkipRepository.deleteByScheduledDeliveryId(delivery.getId());
+
+        delivery.setStatus(Enums.DeliveryStatus.PENDING);
+        deliveryRepository.save(delivery);
+
+        if (notificationService != null) {
+            notificationService.notifyDeliveryUnskipped(delivery.getSubscription().getUser().getEmail(), delivery.getSubscription().getId(), delivery.getDeliveryDate());
+        }
     }
 }

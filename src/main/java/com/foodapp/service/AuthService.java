@@ -3,6 +3,7 @@ package com.foodapp.service;
 import com.foodapp.domain.Enums;
 import com.foodapp.domain.entity.User;
 import com.foodapp.dto.AuthDtos;
+import com.foodapp.enums.OtpPurpose;
 import com.foodapp.repository.UserRepository;
 import com.foodapp.security.JwtService;
 import org.springframework.lang.Nullable;
@@ -33,25 +34,20 @@ public class AuthService {
     private final Random random = new Random();
 
     public AuthDtos.OtpResponse requestLoginOtp(AuthDtos.OtpRequest request) {
-        boolean existing = userRepository.findByEmail(request.email()).isPresent();
+        String email = request.email().toLowerCase();
+        boolean existing = userRepository.findByEmail(email).isPresent();
+
+        // If purpose is LOGIN or FORGOT_PASSWORD and user doesn't exist, return error
+        if ((request.purpose() == OtpPurpose.LOGIN || request.purpose() == OtpPurpose.FORGOT_PASSWORD) && !existing) {
+            throw new IllegalArgumentException("User not found");
+        }
 
         String otp = generateOtp();
+        otpStore.put(email, new OtpState(otp, Instant.now().plusSeconds(300)));
+        AuthDtos.OtpChannel channel = request.channel() == null ? AuthDtos.OtpChannel.EMAIL : request.channel();
+        String destination = dispatchOtp(channel, email, request.mobileNumber(), otp);
 
-        otpStore.put(
-                request.email().toLowerCase(),
-                new OtpState(otp, Instant.now().plusSeconds(300))
-        );
-
-        AuthDtos.OtpChannel channel =
-                request.channel() == null ? AuthDtos.OtpChannel.EMAIL : request.channel();
-
-        String destination = dispatchOtp(channel, request.email(), request.mobileNumber(), otp);
-
-        return new AuthDtos.OtpResponse(
-                existing,
-                "OTP sent successfully" + otp,
-                destination
-        );
+        return new AuthDtos.OtpResponse(existing, "OTP sent successfully", destination);
     }
 
     public AuthDtos.AuthResponse verifyLoginOtp(AuthDtos.VerifyOtpRequest request) {
@@ -60,12 +56,31 @@ public class AuthService {
         if (otpState == null || otpState.expiresAt().isBefore(Instant.now()) || !otpState.otp().equals(request.otp())) {
             throw new IllegalArgumentException("Invalid or expired OTP");
         }
-        User user = userRepository.findByEmail(email)
-                .orElseGet(() -> registerOtpUser(email, request.fullName()));
-        if (!user.isActive()) {
-            throw new IllegalArgumentException("Account is deactivated");
+
+        boolean existing = userRepository.findByEmail(email).isPresent();
+
+        if (request.purpose() == OtpPurpose.REGISTER) {
+            if (existing) throw new IllegalArgumentException("Email already registered");
+            User user = registerOtpUser(email, request.fullName());
+            otpStore.remove(email);
+            String token = jwtService.generateToken(user.getEmail(), user.getRole().name());
+            return new AuthDtos.AuthResponse(token, user.getId(), user.getEmail(), user.getRole().name());
         }
+
+        // FOR LOGIN or FORGOT_PASSWORD: user must exist
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        if (!user.isActive()) throw new IllegalArgumentException("Account is deactivated");
+
         otpStore.remove(email);
+
+        // FORGOT_PASSWORD: return a short success response (no token) so frontend can show Reset Password screen
+        if (request.purpose() == OtpPurpose.FORGOT_PASSWORD) {
+            return new AuthDtos.AuthResponse(null, user.getId(), user.getEmail(), user.getRole().name());
+        }
+
+        // LOGIN: generate token
         String token = jwtService.generateToken(user.getEmail(), user.getRole().name());
         return new AuthDtos.AuthResponse(token, user.getId(), user.getEmail(), user.getRole().name());
     }
@@ -143,7 +158,7 @@ public class AuthService {
         User user = new User();
         user.setEmail(email);
         user.setFullName((fullName == null || fullName.isBlank()) ? "New User" : fullName);
-        user.setPasswordHash(passwordEncoder.encode("OTP_ONLY_USER"));
+        user.setPasswordHash(null);
         user.setRole(Enums.Role.USER);
         user.setActive(true);
         return userRepository.save(user);

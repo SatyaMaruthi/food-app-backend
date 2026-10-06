@@ -7,6 +7,7 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -52,4 +53,14 @@ public class NotificationService {
     }
 
     private record MailTask(String to, String body) {}
+
+    public void notifyDeliverySkipped(String userEmail, Long subscriptionId, LocalDate deliveryDate) {
+        String body = "Delivery skipped for subscription #" + subscriptionId + " on " + deliveryDate;
+        sendOrQueue(userEmail, body);
+    }
+
+    public void notifyDeliveryUnskipped(String userEmail, Long subscriptionId, LocalDate deliveryDate) {
+        String body = "Delivery reinstated for subscription #" + subscriptionId + " on " + deliveryDate;
+        sendOrQueue(userEmail, body);
+    }
 }
